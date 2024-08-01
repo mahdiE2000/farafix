@@ -1,0 +1,10 @@
+User-Agent: *
+Dissallow: /admin.farafix.com/
+Dissallow: /farafix.com/_nuxt/
+Allow: /farafix.com
+Allow: /washing-machine
+Allow: /refrigerator-freezer
+Allow: /air-conditioner
+Allow: /central-heating
+Allow: /dishwasher
+

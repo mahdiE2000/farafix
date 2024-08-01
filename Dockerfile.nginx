@@ -1,0 +1,3 @@
+FROM docker.willaspace.com/repository/docker-hosted/nginx:alpine
+
+COPY public /var/www/html/public

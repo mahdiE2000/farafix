@@ -1,0 +1,139 @@
+kind: pipeline
+type: kubernetes
+name: farafix CICD
+
+clone:
+  disable: true
+# Define build step
+# npm config set _auth token add command
+steps:
+  - name: clone
+    image: docker.willaspace.com/repository/docker-hosted/alpine/git
+    commands:
+      - git clone $DRONE_GIT_HTTP_URL .
+      - git checkout $DRONE_COMMIT
+  - name: Build docker image
+    image: docker.willaspace.com/repository/docker-hosted/plugins/docker:latest
+    environment:
+      REGISTRY_USER_NAME:
+        from_secret: registry_username
+      REGISTRY_PASSWORD:
+        from_secret: registry_password
+    settings:
+      tags:
+        - latest
+        - ${DRONE_BUILD_NUMBER}
+      dockerfile: Dockerfile
+      registry: docker.willaspace.com
+      repo: docker.willaspace.com/repository/docker-hosted/external-projects/farafix-back
+      build_args_from_env:
+        - REGISTRY_USER_NAME
+        - REGISTRY_PASSWORD
+      username:
+        from_secret: registry_username
+      password:
+        from_secret: registry_password
+    when:
+      branch:
+        - master
+      event:
+        - push
+
+  - name: Build docker nginx image
+    image: docker.willaspace.com/repository/docker-hosted/plugins/docker
+    settings:
+      tags:
+        - nginx-latest
+        - nginx-${DRONE_BUILD_NUMBER}
+      dockerfile: Dockerfile.nginx
+      registry: docker.willaspace.com
+      repo: docker.willaspace.com/repository/docker-hosted/external-projects/farafix-back
+      username:
+        from_secret: registry_username
+      password:
+        from_secret: registry_password
+    when:
+      branch:
+        - master
+      event:
+        - push
+
+  - name: deploy
+    image: docker.willaspace.com/repository/docker-hosted/pelotech/drone-helm3:latest
+    environment:
+      USERNAME:
+        from_secret: registry_username
+      PASSWORD:
+        from_secret: registry_password
+    settings:
+      mode: upgrade
+      kube_api_server:
+        from_secret: kubernates_api
+      kube_token:
+        from_secret: kubernates_token
+      skip_tls_verify: true
+      chart: willaspace/application
+      debug: true
+      release: farafix-production-back
+      namespace: farafix
+      add_repos:
+        - willaspace=https://$USERNAME:$PASSWORD@repo.willaspace.com/repository/willaspace-charts/
+      values_files:
+        - .values.yaml
+      values:
+        - deployment.image.tag=nginx-$DRONE_BUILD_NUMBER
+        - deployment.additionalContainers[0].image=docker.willaspace.com/repository/docker-hosted/external-projects/farafix-back:$DRONE_BUILD_NUMBER
+        - deployment.initContainers.init-artisan.image=docker.willaspace.com/repository/docker-hosted/external-projects/farafix-back:$DRONE_BUILD_NUMBER
+      timeout: 3000
+    when:
+      branch:
+        - master
+      event:
+        - pull_request
+        - push
+
+
+image_pull_secrets:
+  - regcred
+
+---
+kind: secret
+name: regcred
+get:
+  path: regcred
+  name: .dockerconfigjson
+
+---
+kind: secret
+name: registry_token
+get:
+  path: global-variables-drone-secrets
+  name: registry_token
+
+---
+kind: secret
+name: registry_username
+get:
+  path: global-variables-drone-secrets
+  name: registry_username
+
+---
+kind: secret
+name: registry_password
+get:
+  path: global-variables-drone-secrets
+  name: registry_password
+
+---
+kind: secret
+name: kubernates_api
+get:
+  path: global-variables-drone-secrets
+  name: kubernates_api
+
+---
+kind: secret
+name: kubernates_token
+get:
+  path: global-variables-drone-secrets
+  name: kubernates_token
